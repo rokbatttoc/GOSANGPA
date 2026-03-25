@@ -2145,9 +2145,10 @@ select option{background:#111418;}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-<script>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getDatabase, ref, set, get, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+
 const firebaseConfig = {
   apiKey: "AIzaSyAudOVyAO4zJ4-8fGeVxBsKfY1Lxos4BFI",
   authDomain: "rokbattgosangpa.firebaseapp.com",
@@ -2157,64 +2158,81 @@ const firebaseConfig = {
   messagingSenderId: "916511111430",
   appId: "1:916511111430:web:10724596fa3c5d301cc687"
 };
-firebase.initializeApp(firebaseConfig);
-const _fbDb = firebase.database();
-window._fbDb = _fbDb;
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+window._fbDb = db;
+window._fbRef = ref;
+window._fbSet = set;
+window._fbGet = get;
+window._fbOnValue = onValue;
 window._fbReady = true;
 
-const FB_PATH = {
+// Firebase 초기 데이터 로드 및 실시간 동기화
+const FB_KEYS = {
   logs:      'gosangpa/logs',
   srArchive: 'gosangpa/srArchive',
   commPosts: 'gosangpa/commPosts',
   dispatches:'gosangpa/dispatches',
   hwItems:   'gosangpa/hwItems',
 };
+window._fbPath = FB_KEYS;
 
-// Firebase 값을 안전하게 배열로 변환
-function _toArr(val){
-  if(!val) return [];
-  if(Array.isArray(val)) return val.filter(x=>x!=null);
-  if(typeof val==='object') return Object.values(val).filter(x=>x!=null);
-  return [];
-}
-
-// 실시간 리스너
+// 실시간 리스너 등록
 function fbListen(key, callback){
-  _fbDb.ref(FB_PATH[key]).on('value', snap=>{
-    const val=snap.val();
-    if(val!==null) callback(val);
+  const r = ref(db, FB_KEYS[key]);
+  onValue(r, snap => {
+    const val = snap.val();
+    if(val !== null) callback(val);
   });
 }
+
+window._fbListen = fbListen;
 
 // 앱 로드 완료 후 실시간 동기화 시작
-document.addEventListener('DOMContentLoaded', ()=>{
-  fbListen('logs', val=>{
-    if(typeof logs==='undefined') return;
-    logs=_toArr(val);
-    if(typeof renderLogs==='function') renderLogs();
-    if(typeof srRenderCal==='function'){srRenderCal();srRenderArchiveSummary();}
+document.addEventListener('DOMContentLoaded', () => {
+  // Firebase 값을 안전하게 배열로 변환
+  const toArr = val => {
+    if(!val) return [];
+    if(Array.isArray(val)) return val;
+    if(typeof val === 'object') return Object.values(val);
+    return [];
+  };
+
+  fbListen('logs', val => {
+    const arr = toArr(val);
+    if(typeof logs !== 'undefined'){
+      logs = arr;
+      if(typeof renderLogs==='function') renderLogs();
+      if(typeof srRenderCal==='function'){srRenderCal();srRenderArchiveSummary();}
+    }
   });
-  fbListen('srArchive', val=>{
-    if(typeof srArchive==='undefined') return;
-    const obj=val||{};
-    Object.keys(obj).forEach(k=>{if(!Array.isArray(obj[k]))obj[k]=_toArr(obj[k]);});
-    srArchive=obj;
-    if(typeof srRenderCal==='function'){srRenderCal();srRenderArchiveSummary();}
+  fbListen('srArchive', val => {
+    if(typeof srArchive !== 'undefined'){
+      // srArchive는 날짜키:{배열} 구조 — 각 값도 배열로 변환
+      const obj = val || {};
+      Object.keys(obj).forEach(k=>{ if(!Array.isArray(obj[k])) obj[k]=Object.values(obj[k]||{}); });
+      srArchive = obj;
+      if(typeof srRenderCal==='function'){srRenderCal();srRenderArchiveSummary();}
+    }
   });
-  fbListen('commPosts', val=>{
-    if(typeof commPosts==='undefined') return;
-    commPosts=_toArr(val);
-    if(typeof renderCommList==='function') renderCommList();
+  fbListen('commPosts', val => {
+    if(typeof commPosts !== 'undefined'){
+      commPosts = toArr(val);
+      if(typeof renderCommList==='function') renderCommList();
+    }
   });
-  fbListen('dispatches', val=>{
-    if(typeof dpDispatches==='undefined') return;
-    dpDispatches=val||{};
-    if(typeof dpRenderList==='function'){dpRenderList();dpRenderCal();}
+  fbListen('dispatches', val => {
+    if(typeof dpDispatches !== 'undefined'){
+      dpDispatches = val || {};
+      if(typeof dpRenderList==='function'){dpRenderList();dpRenderCal();}
+    }
   });
-  fbListen('hwItems', val=>{
-    if(typeof hwItems==='undefined') return;
-    hwItems=_toArr(val);
-    if(typeof hwRenderItems==='function'){hwRenderItems();hwRenderNotices();}
+  fbListen('hwItems', val => {
+    if(typeof hwItems !== 'undefined'){
+      hwItems = toArr(val);
+      if(typeof hwRenderItems==='function'){hwRenderItems();hwRenderNotices();}
+    }
   });
 });
 </script>
@@ -2325,26 +2343,22 @@ const LS_KEYS = {
   dispatches:'락뱃_dpDispatches',
   hwItems:   '락뱃_hwItems',
 };
-const FB_PATH = {
-  logs:      'gosangpa/logs',
-  srArchive: 'gosangpa/srArchive',
-  commPosts: 'gosangpa/commPosts',
-  dispatches:'gosangpa/dispatches',
-  hwItems:   'gosangpa/hwItems',
-};
 
 function lsSave(key, data){
   // 로컬스토리지 저장
   try { localStorage.setItem(LS_KEYS[key], JSON.stringify(data)); } catch(e){ console.warn('LS 저장 실패:', e); }
-  // Firebase 저장
-  if(!FB_PATH[key]) return;
+  // Firebase 저장 (준비됐을 때만)
   const doFbSave = () => {
-    if(!window._fbDb) return;
-    window._fbDb.ref(FB_PATH[key]).set(data)
-      .catch(e=>console.warn('FB 저장 실패:', key, e));
+    if(!window._fbDb || !window._fbRef || !window._fbSet) return;
+    const fbPath = window._fbPath && window._fbPath[key];
+    if(!fbPath) return;
+    try {
+      window._fbSet(window._fbRef(window._fbDb, fbPath), data)
+        .catch(e=>console.warn('FB 저장 실패:', key, e));
+    } catch(e){}
   };
   if(window._fbReady){ doFbSave(); }
-  else { setTimeout(doFbSave, 2000); }
+  else { setTimeout(doFbSave, 2500); }
 }
 function lsLoad(key, fallback){
   try {
@@ -2372,18 +2386,19 @@ function lsRestoreAll(){
 
 // ─── Firebase 전체 동기화 (로컬 → 서버) ─────────────
 async function fbSyncAll(){
-  if(!window._fbReady||!window._fbDb){
+  if(!window._fbReady){
     alert('Firebase 연결 중입니다. 잠시 후 다시 시도해주세요.');
     return;
   }
   const btn=document.getElementById('fb-sync-btn');
   if(btn){btn.textContent='⏳ 동기화 중...';btn.disabled=true;}
+  const p=window._fbPath;
   try{
-    await window._fbDb.ref('gosangpa/logs').set(logs||[]);
-    await window._fbDb.ref('gosangpa/srArchive').set(srArchive||{});
-    await window._fbDb.ref('gosangpa/commPosts').set(commPosts||[]);
-    await window._fbDb.ref('gosangpa/dispatches').set(dpDispatches||{});
-    await window._fbDb.ref('gosangpa/hwItems').set(hwItems||[]);
+    await window._fbSet(window._fbRef(window._fbDb, p.logs), logs||[]);
+    await window._fbSet(window._fbRef(window._fbDb, p.srArchive), srArchive||{});
+    await window._fbSet(window._fbRef(window._fbDb, p.commPosts), commPosts||[]);
+    await window._fbSet(window._fbRef(window._fbDb, p.dispatches), dpDispatches||{});
+    await window._fbSet(window._fbRef(window._fbDb, p.hwItems), hwItems||[]);
     if(btn){btn.textContent='✅ 완료';setTimeout(()=>{btn.textContent='☁️ 서버 동기화';btn.disabled=false;},2000);}
   }catch(e){
     if(btn){btn.textContent='❌ 실패';btn.disabled=false;}
